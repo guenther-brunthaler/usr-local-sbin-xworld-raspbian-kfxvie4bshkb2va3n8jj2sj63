@@ -1,0 +1,3 @@
+#! /bin/sh
+ls /etc/rc[0-9].d/S[0-9][0-9]${1:?"What service?"} \
+	| cut -d/ -f3 | tr -cd 0-9; echo

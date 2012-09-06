@@ -1,0 +1,76 @@
+#! /bin/sh
+show_version() {
+	cat <<- .
+	$APP version 12.156
+
+	(c) 2012 by Guenther Brunthaler.
+	This script is free software.
+	Distribution is permitted under the terms of the GPLv3.
+.
+}
+APP=${0##*/}
+
+
+finish() {
+	echo "Success!"
+	trap - 0
+	exit
+}
+
+
+exit_usage() {
+	cat <<- .
+	Usage: $APP [ <options> ] <servicename> ...
+
+.
+	show_version
+	finish
+}
+
+
+set -e
+trap "echo 'Failed!' >& 2" 0
+from=
+into=
+what=
+runlevels='?'
+while getopts edr:lLhV OPT
+do
+	case $OPT in
+		r) runlevels="[$OPTARG]";;
+		e) what=enabling; from=K; into=S;;
+		d) what=disabling; from=S; into=K;;
+		l) what=displaying; from=; into=;;
+		L) what=LIST;;
+		h) exit_usage;;
+		V) show_version; finish;;
+		*) false; exit
+	esac
+done
+shift `expr $OPTIND - 1`
+if test x"$what" = x"LIST"
+then
+	{
+		echo "List of services registered" \
+			"to start or stop in any runlevel:"
+		echo
+	} >& 2
+	ls /etc/rc[0-9].d/S[0-9][0-9]* | cut -d/ -f4 | cut -c4- | sort -u
+	finish
+fi
+{ test $# = 0 || test -z "$what"; } && exit_usage >& 2
+cd /etc
+for svc
+do
+	echo "$what $svc for runlevel(s) \"$runlevels\"..."
+	if test -z "$from"
+	then
+		eval "ls -Ldo -- rc$runlevels.d/S[0-9][0-9]\"$svc\"" \
+			2> /dev/null || :
+	else
+		eval "rename 's,\.d/""$from"",.d/""$into"",' \
+			rc$runlevels.d/S[0-9][0-9]\"$svc\"" \
+		&& update-rc.d "$svc" defaults
+	fi
+done
+finish

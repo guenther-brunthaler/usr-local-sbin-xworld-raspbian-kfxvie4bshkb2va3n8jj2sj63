@@ -1,0 +1,1 @@
+aptitude --schedule-only -oApt::AutoRemove::SuggestsImportant=true -oAptitude::Delete-Unused=false -oApt::AutoRemove::SuggestsImportant=true markauto '~i !~M (?reverse-depends(~i) | ?reverse-predepends(~i))'
