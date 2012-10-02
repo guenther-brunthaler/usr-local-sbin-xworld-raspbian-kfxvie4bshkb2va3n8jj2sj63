@@ -1,0 +1,45 @@
+#! /bin/sh
+# Start an rsync daemon on a different host exporting
+# modules "apt-lists" and "apt-archives". Create an SSH tunnel
+# from localhost:10873 to the machine and port where the rsync
+# daemon is listening. Then run this script.
+# A different port than 10873 can be selected with the -p option.
+
+die() {
+	echo "ERROR: $*" >& 2
+	false; exit
+}
+
+run() {
+	"$@" && return
+	die "Command >>>$*<<< failed with return code ${?}!"
+}
+
+do_rsync() {
+	run test -n "$1"
+	run test -d "$2"
+	run test -e "$2/$3"
+	run rsync $DRY_RUN $VERBOSE -t --dirs --delete \
+		--port "$PORT" \
+		--exclude "$3" \
+		--stats --human-readable --human-readable \
+		localhost::"$1"/ "$2"/
+}
+
+DRY_RUN=
+VERBOSE=
+PORT=10873
+while getopts nvp: OPT
+do
+	case $OPT  in
+		n) DRY_RUN=-n;;
+		v) VERBOSE=-v;;
+		p) PORT=$OPTARG;;
+		*) exit
+	esac
+done
+APT_CACHE=`which apt-cache 2> /dev/null`
+test -f "$APT_CACHE"
+do_rsync apt-lists /var/lib/apt/lists partial
+test -z "$DRY_RUN" && run "$APT_CACHE" gencaches
+do_rsync apt-archives /var/cache/apt/archives lock
