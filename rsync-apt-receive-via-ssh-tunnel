@@ -18,10 +18,12 @@ run() {
 do_rsync() {
 	run test -n "$1"
 	run test -d "$2"
-	run test -e "$2/$3"
-	run rsync $DRY_RUN $VERBOSE -t --dirs $4 \
+	run rsync $DRY_RUN $VERBOSE -t --dirs $3 \
 		--port "$PORT" \
-		--exclude "$3" \
+		--filter "H /partial" \
+		--filter "P /partial" \
+		--filter "H /lock" \
+		--filter "P /lock" \
 		--stats --human-readable --human-readable \
 		localhost::"$1"/ "$2"/
 }
@@ -40,6 +42,6 @@ do
 done
 APT_CACHE=`which apt-cache 2> /dev/null`
 test -f "$APT_CACHE"
-do_rsync apt-lists /var/lib/apt/lists partial --delete
+do_rsync apt-lists /var/lib/apt/lists --delete
 test -z "$DRY_RUN" && run "$APT_CACHE" gencaches
-do_rsync apt-archives /var/cache/apt/archives lock
+do_rsync apt-archives /var/cache/apt/archives
