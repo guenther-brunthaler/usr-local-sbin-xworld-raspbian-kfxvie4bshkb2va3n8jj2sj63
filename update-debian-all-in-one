@@ -14,7 +14,7 @@ phase() {
 		*) skip="Skipping "; shift
 	esac
 	this=$1
-	shift 2
+	shift
 	test $PHASE -gt $this && return
 	if test -n "$SIMULATE"
 	then
