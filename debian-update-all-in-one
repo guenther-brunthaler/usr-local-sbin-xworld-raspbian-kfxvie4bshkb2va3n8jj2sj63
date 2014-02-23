@@ -19,7 +19,8 @@ phase() {
 	if test -n "$SIMULATE"
 	then
 		echo "*** ${skip}Phase $this [SIMULATION]: $*"
-	else
+	elif test -z "$skip"
+	then
 		echo "*** ${skip}Phase $this: $*"
 		"$@"
 	fi
