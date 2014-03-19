@@ -1,0 +1,79 @@
+#! /bin/sh
+# Stores or loads the Debian package archives and -lists to/from
+# subdirectories of the local directory (which will typically be located on a
+# removable storage medium).
+#
+# Version 14.77.1
+#
+# (c) 2014 by Guenther Brunthaler.
+# This script is free software.
+# Distribution is permitted under the terms of the GPLv3.
+
+die() {
+	echo "ERROR: $*" >& 2
+	false; exit
+}
+
+run() {
+	"$@" && return
+	die "Command >>>$*<<< failed with return code ${?}!"
+}
+
+do_rsync() {
+	local from into xcl mode delete
+	from=$1; into=$2; mode=$3; delete=$4
+	test $mode = store && { from=$2; into=$1; }
+	run test -d "$from"
+	run test -d "$into"
+	set -- run rsync $DRY_RUN $VERBOSE -t --dirs $delete
+	for xcl in partial lock
+	do
+		set -- "$@" --filter "H /$xcl"
+		test $mode = load && set -- "$@" --filter "P /$xcl"
+	done
+	set -- "$@" --stats --human-readable --human-readable "$from"/ "$into"/
+	emulate "$@"
+	"$@"
+}
+
+emulate() {
+	test -n "$DRY_RUN" && echo "EMULATION: $*" >& 2
+}
+
+runtime() {
+	set -- run "$@"
+	test -n "$DRY_RUN" && set -- emulate "$@"
+	"$@"
+}
+
+DRY_RUN=
+VERBOSE=
+MODE=
+while getopts nv: OPT
+do
+	case $OPT  in
+		n) DRY_RUN=-n;;
+		v) VERBOSE=-v;;
+		*) exit
+	esac
+done
+shift `expr $OPTIND - 1`
+case $1 in
+	load | store) MODE=$1;;
+	*) die "Usage: ${0##*/} ( store | load )"
+esac
+HERE=`pwd`
+HERE=`readlink -f "$HERE"`
+run test -n "$HERE"
+run test -d "$HERE"
+APT_CACHE=`which apt-cache 2> /dev/null`
+test -f "$APT_CACHE"
+do_rsync "$HERE"/apt-lists /var/lib/apt/lists $MODE --delete
+test $MODE = load && runtime "$APT_CACHE" gencaches
+set -- do_rsync "$HERE"/apt-archives /var/cache/apt/archives $MODE
+if test $MODE = store
+then
+	runtime apt-get autoclean # Don't store outdated files.
+	set -- "$@" --delete # Remove excess files in storage.
+fi
+"$@"
