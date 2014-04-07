@@ -3,7 +3,7 @@
 # subdirectories of the local directory (which will typically be located on a
 # removable storage medium).
 #
-# Version 14.77.1
+# Version 14.97
 #
 # (c) 2014 by Guenther Brunthaler.
 # This script is free software.
@@ -23,7 +23,9 @@ do_rsync() {
 	local from into xcl mode delete
 	from=$1; into=$2; mode=$3; delete=$4
 	test $mode = store && { from=$2; into=$1; }
+	from=`readlink -f "$from"`
 	run test -d "$from"
+	into=`readlink -f "$into"`
 	run test -d "$into"
 	set -- run rsync $DRY_RUN $VERBOSE -t --dirs $delete
 	for xcl in partial lock
