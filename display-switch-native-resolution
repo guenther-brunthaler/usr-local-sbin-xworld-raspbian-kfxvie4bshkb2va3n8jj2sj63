@@ -99,7 +99,7 @@ export LC_ALL=C
 tv=/usr/bin/tvservice
 test -f "$tv"
 
-groups=`"$tv" -h | sed 's/.*--explicit.*(\([^)]*\)).*/\1/; t 1; d; :1 s/,//g'`
+groups=`"$tv" -h | sed 's/.*-m,.*(\([^)]*\)).*/\1/; t 1; d; :1 s/,//g'`
 test -n "$groups"
 
 while :
