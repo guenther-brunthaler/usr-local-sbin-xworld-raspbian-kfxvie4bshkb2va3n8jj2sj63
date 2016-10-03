@@ -1,0 +1,150 @@
+#! /bin/sh
+# Switches to the preferred native display resolution the currently connected
+# monitor, unless the script is called via a symlink which replaces the
+# "-native-" by "-vga-" of the original script name, in which case the display
+# is switched to VGA resolution which will work for every monitor. The idea is
+# to switch to VGA resolution first, then unplug the monitor and plug in a
+# different monitor, and finally run the "-native-"-script to switch to the
+# preferred resolution of the newly plugged-in monitor.
+set -e
+cleanup() {
+	rc=$?
+	if test -n "$helper"
+	then
+		kill $helper || :
+		wait $helper || :
+	fi
+	test -n "$enum" && rm -- "$enum"
+	test $rc = 0 || echo "$0 failed!" >& 2
+}
+helper=
+enum=
+trap cleanup 0
+trap 'exit $?' INT TERM HUP QUIT
+
+case $0 in
+	*-native-*) compatibility=false;;
+	*-vga-*) compatibility=true;;
+	*) false || exit
+esac
+
+export LC_ALL=C
+tv=/usr/bin/tvservice
+test -f "$tv"
+
+groups=`"$tv" -h | sed 's/.*--explicit.*(\([^)]*\)).*/\1/; t 1; d; :1 s/,//g'`
+test -n "$groups"
+
+while :
+do
+	t=`mktemp -u "${TMPDIR:-/tmp}/${0##*/}.XXXXXXXXXX"`
+	mkfifo -m 700 -- "$t" && break
+done
+enum=$t
+
+parse() {
+	local t
+	t=${text#"$1"}
+	test x"$t" != x"$text" || return
+	text=$t
+}
+
+parse1WS() {
+	parse "$HT" || parse ' '
+}
+HT=`printf '\t:'`; HT=${HT%:}
+
+skipWS() {
+	while parse1WS
+	do
+		:
+	done
+}
+
+parseWS() {
+	parse1WS; skipWS
+}
+
+parse_uint() {
+	local char rest
+	value=
+	while :
+	do
+		case $text in
+			[0-9]*) ;;
+			*) break
+		esac
+		rest=${text#?}
+		char=${text%"$rest"}
+		text=$rest
+		value=$value$char
+		test ${#value} = 1 && test 0 = "$char" && break
+	done
+}
+
+m=
+for group in $groups
+do
+	"$tv" -m $group > "$enum" 2> /dev/null || : & helper=$!
+	# Parse lines like the following one:
+	#
+	# (prefer) mode 35: 1280x1024 @ 60Hz 5:4, clock:108MHz progressive
+	while read -r text
+	do
+		if parse '(prefer)'
+		then
+			matching=true
+			parseWS
+		else
+			matching=false
+		fi
+		$compatibility && matching=false
+		parse 'mode' || continue
+		parseWS
+		parse_uint; mode=$value
+		parse ':'; skipWS
+		parse_uint; width=$value
+		parse 'x'
+		parse_uint; height=$value
+		skipWS; parse '@'; skipWS
+		parse_uint; hz=$value; parse 'Hz'
+		case $text in
+			*progressive*) quality=1;;
+			*) quality=0
+		esac
+		if
+			$compatibility \
+			&& test 640 = "$width" && test 480 = "$height"
+		then
+			matching=true
+		fi
+		$matching || continue
+		# Find matching mode with best quality and least Hz.
+		test -n "$m" && {
+			test $quality -gt $best_quality || {
+				test $quality = $best_quality \
+				&& test $hz -lt $best_hz
+			}
+		} && m=
+		test -n "$m" && continue
+		best_quality=$quality; best_hz=$hz
+		g=$group; m=$mode; w=$width; h=$height
+	done < "$enum"
+	t=$helper; helper=; wait $t
+done
+test -n "$m"
+echo "Switching to HDMI group $g mode $m ($w x $h pixels, $best_hz Hz)"
+if $compatibility
+then
+	d=8 # VGA uses only 16 colors, so d=1 or d=2. But the minimum is 8.
+else
+	d=24
+fi
+case $d in
+	8) nd=16;;
+	*) nd=8
+esac
+/usr/bin/tvservice -e "$g $m"
+fbset -a -g $w $h $w $h $nd
+sleep 1
+fbset -a -depth $d
