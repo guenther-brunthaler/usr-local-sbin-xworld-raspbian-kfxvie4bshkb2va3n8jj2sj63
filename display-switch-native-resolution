@@ -95,6 +95,35 @@ case $0 in
 	*) false || exit # Bad name of the script!
 esac
 
+t=`tty`
+case ${t#/dev/} in
+	tty[0-9]* | vc[0-9]*) t=
+esac
+if xset q > /dev/null 2>& 1 || test -n "$t"
+then
+	cat << EOF # Text width of message: 66 columns.
+You need to run that script directly from a virtual console. Do
+not try to run it from within a graphical UI session, because
+changing the framebuffer resolution will might confuse the
+graphical display server.
+
+Even though some window managers (such as FluxBox) seem to
+tolerate changing the framebuffer resolution if a graphical
+display server is running, but not currently visible on-screen
+(because a virtual console is visible instead), it might be
+prudent to log out of your GUI session and stopping the graphical
+login manager before running this script.
+
+When trying to resize the framebuffer while Xorg was running and
+visible on-screen, I noticed that resizing to VGA resolution
+actually worked fine, but when trying to switch back to the
+native resolution, the display went "dead", and switching to
+virtual consoles did not work any longer either. I had to reboot
+to get back the display. So better don't do that...
+EOF
+	false || exit
+fi
+
 export LC_ALL=C
 tv=/usr/bin/tvservice
 test -f "$tv"
@@ -215,3 +244,4 @@ esac
 fbset -a -g $w $h $w $h $nd
 sleep 1
 fbset -a -depth $d
+xrefresh 2> /dev/null || :
