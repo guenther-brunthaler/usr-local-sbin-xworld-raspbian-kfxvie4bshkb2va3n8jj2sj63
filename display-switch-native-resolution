@@ -1,11 +1,68 @@
 #! /bin/sh
-# Switches to the preferred native display resolution the currently connected
-# monitor, unless the script is called via a symlink which replaces the
-# "-native-" by "-vga-" of the original script name, in which case the display
-# is switched to VGA resolution which will work for every monitor. The idea is
-# to switch to VGA resolution first, then unplug the monitor and plug in a
-# different monitor, and finally run the "-native-"-script to switch to the
-# preferred resolution of the newly plugged-in monitor.
+exit_version() {
+	cat << EOF; exit
+$APP Version 2016.277
+
+Copyright (c) 2016 Guenther Brunthaler. All rights reserved.
+
+This script is free software.
+Distribution is permitted under the terms of the GPLv3.
+EOF
+}
+APP=${0##*/}
+
+exit_help() {
+	cat << EOF && exit_version # Width of help text: 66 colums.
+Usage: $APP [ <options> ... ]	
+
+This script changes the screen resolution "on the fly" (i. e.
+without modifying /boot/config.txt or rebooting) on the Raspberry
+Pi single-board computer.
+
+It also resizes the framebuffer to match the new display
+dimensions, and ensures the new frame buffer contents are also
+immediately visible on-screen (i. e. no need to switch the
+console).
+
+This script is actually two scripts in one and does different
+things depending under which name it is called. Create a symlink
+to allow the user call it under both names.
+
+In both cases, it queries the EDID info of the currently
+connected monitor and selects a display mode depending on the
+script's name, switches the monitor to this display mode, and
+then resizes the framebuffer device to match the mode's width and
+height.
+
+If the script's name contains the substring "-vga-", it selects
+the "most compatible" mode of your monitor, i. e. a mode with 640
+x 480 pixels, and the one with the least Hz, but still prefers
+progressive over interlaced modes.
+
+If the script's name contains the substring "-native-", it
+selects the monitor's preferred mode, which is usually the native
+resolution in case of pixel-based (such as LCD) rather than
+analog CRT output devices.
+
+The idea is to switch to VGA resolution first, then unplug the
+current monitor and plug in a different monitor.
+
+Because every monitor can display VGA, the new monitor should
+still be able to display something. Otherwise just repeat the
+last command, switching the newly plugged monitor to VGA in any
+case.
+
+Finally run the script with "-native-" in its name to switch to
+the preferred resolution of the newly plugged monitor.
+
+Supported options:
+
+-h: Display this help.
+-V: Just display the following version info.
+
+EOF
+}
+
 set -e
 cleanup() {
 	rc=$?
@@ -22,10 +79,20 @@ enum=
 trap cleanup 0
 trap 'exit $?' INT TERM HUP QUIT
 
+while getopts Vh opt
+do
+	case $opt in
+		h) exit_help;;
+		V) exit_version;;
+		*) false || exit
+	esac
+done
+shift `expr $OPTIND - 1 || :`
+
 case $0 in
 	*-native-*) compatibility=false;;
 	*-vga-*) compatibility=true;;
-	*) false || exit
+	*) false || exit # Bad name of the script!
 esac
 
 export LC_ALL=C
@@ -37,7 +104,7 @@ test -n "$groups"
 
 while :
 do
-	t=`mktemp -u "${TMPDIR:-/tmp}/${0##*/}.XXXXXXXXXX"`
+	t=`mktemp -u "${TMPDIR:-/tmp}/$APP.XXXXXXXXXX"`
 	mkfifo -m 700 -- "$t" && break
 done
 enum=$t
