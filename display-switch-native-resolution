@@ -1,7 +1,7 @@
 #! /bin/sh
 exit_version() {
 	cat << EOF; exit
-$APP Version 2016.278
+$APP Version 2016.281
 
 Copyright (c) 2016 Guenther Brunthaler. All rights reserved.
 
@@ -57,6 +57,7 @@ the preferred resolution of the newly plugged monitor.
 
 Supported options:
 
+-f: Skip check to ensure script is run from a terminal console.
 -h: Display this help.
 -V: Just display the following version info.
 
@@ -79,9 +80,11 @@ enum=
 trap cleanup 0
 trap 'exit $?' INT TERM HUP QUIT
 
-while getopts Vh opt
+force=false
+while getopts fVh opt
 do
 	case $opt in
+		f) force=true;;
 		h) exit_help;;
 		V) exit_version;;
 		*) false || exit
@@ -95,10 +98,15 @@ case $0 in
 	*) false || exit # Bad name of the script!
 esac
 
-t=`tty`
-case ${t#/dev/} in
-	tty[0-9]* | vc[0-9]*) t=
-esac
+if $force
+then
+	unset DISPLAY t
+else
+	t=`tty`
+	case ${t#/dev/} in
+		tty[0-9]* | vc[0-9]*) t=
+	esac
+fi
 if xset q > /dev/null 2>& 1 || test -n "$t"
 then
 	cat << EOF # Text width of message: 66 columns.
