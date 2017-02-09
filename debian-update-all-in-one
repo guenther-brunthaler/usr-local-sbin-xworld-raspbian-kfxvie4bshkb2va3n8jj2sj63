@@ -1,0 +1,52 @@
+#! /bin/sh
+
+retry() {
+	while ! "$@"
+	do
+		sleep 5
+	done
+}
+
+phase() {
+	local this skip
+	case $1 in
+		[1-9]) skip=;;
+		*) skip="Skipping "; shift
+	esac
+	this=$1
+	shift
+	test $PHASE -gt $this && return
+	if test -n "$SIMULATE"
+	then
+		echo "*** ${skip}Phase $this [SIMULATION]: $*"
+	elif test -z "$skip"
+	then
+		echo "*** ${skip}Phase $this: $*"
+		"$@"
+	fi
+}
+
+trap "echo 'Failed!' >& 2" 0
+set -e
+SIMULATE=
+dist=dist-
+FULL=
+while getopts nDf OPT
+do
+	case $OPT in
+		n) SIMULATE=Y;;
+		f) FULL=Y;;
+		D) dist=;;
+		*) false
+	esac
+done
+shift `expr $OPTIND - 1`
+PHASE=`expr 0"${1:-1}" + 0`
+phase 1 retry apt-get update
+phase $FULL 2 retry debdelta-upgrade
+phase 3 retry apt-get ${dist}upgrade --download-only --assume-yes
+phase 4 apt-get ${dist}upgrade --assume-yes
+phase 5 apt-get autoremove --assume-yes
+phase 6 apt-get autoclean
+echo "Done!"
+trap - 0
