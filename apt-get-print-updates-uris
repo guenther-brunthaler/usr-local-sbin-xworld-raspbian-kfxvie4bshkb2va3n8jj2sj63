@@ -1,0 +1,2 @@
+#! /bin/sh
+exec apt-get dist-upgrade --print-uris -qq
